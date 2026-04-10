@@ -13,51 +13,100 @@ Output:
   dist-backend\novivo_backend\novivo_backend.exe   ← entry point
 """
 
+import ast, os, sys
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 block_cipher = None
 
-# ── Auto-collect tất cả imports từ các package chính ─────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# BƯỚC 1: Tự quét tất cả file .py trong project → phát hiện imports
+# ═══════════════════════════════════════════════════════════════════
+_SPEC_DIR = Path(SPECPATH)  # noqa: F821 – PyInstaller injects SPECPATH
+
+def _scan_imports(root: Path) -> set[str]:
+    """Parse tất cả .py file, trả về top-level package names."""
+    found = set()
+    for py in root.rglob("*.py"):
+        # bỏ qua venv
+        if "venv" in py.parts or "__pycache__" in py.parts:
+            continue
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    found.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.level == 0:
+                    found.add(node.module.split(".")[0])
+    return found
+
+_scanned = _scan_imports(_SPEC_DIR)
+print(f"[SCAN] Phát hiện {len(_scanned)} top-level packages từ source code")
+
+# ── Danh sách package cần collect_all (base + scanned) ───────────────────────
+# Ánh xạ tên import → tên package PyPI/collect_all thực tế
+_IMPORT_TO_PKG = {
+    "jose":        "jose",
+    "multipart":   "multipart",
+    "dotenv":      "dotenv",
+    "cv2":         None,   # optional – bỏ qua nếu không cài
+    "torch":       None,
+    "tensorflow":  None,
+}
+
+_BASE_PACKAGES = [
+    "uvicorn", "fastapi", "starlette",
+    "pydantic", "pydantic_settings",
+    "sqlalchemy", "aiosqlite",
+    "passlib", "jose", "multipart",
+    "google.genai", "google.ai",
+    "langchain", "langchain_community", "langchain_google_genai",
+    "chromadb", "sentence_transformers",
+    "tavily", "httpx",
+    "anyio", "click", "h11", "httptools",
+    "websockets", "watchfiles",
+    "python_dotenv", "dotenv",
+    "requests", "certifi", "charset_normalizer",
+    "grpc", "proto",
+    "tenacity", "packaging", "typing_extensions",
+]
+
+# Gộp scanned imports vào base (bỏ stdlib + None-mapped)
+import sys as _sys
+_stdlib = set(_sys.stdlib_module_names) if hasattr(_sys, "stdlib_module_names") else set()
+_skip = {"__future__", "typing", "abc", "os", "sys", "re", "json", "io",
+         "time", "math", "copy", "enum", "pathlib", "logging", "datetime",
+         "collections", "functools", "itertools", "contextlib", "threading",
+         "subprocess", "shutil", "tempfile", "uuid", "hashlib", "base64",
+         "urllib", "http", "traceback", "warnings", "dataclasses", "inspect",
+         # local packages (sẽ được Analysis tự xử lý)
+         "config", "database", "models", "routers", "services", "core"}
+_skip |= _stdlib
+
+_all_packages = list(dict.fromkeys(
+    _BASE_PACKAGES + [
+        _IMPORT_TO_PKG.get(p, p)
+        for p in sorted(_scanned)
+        if p not in _skip and _IMPORT_TO_PKG.get(p, p) is not None
+    ]
+))
+
+# ── Chạy collect_all cho từng package ────────────────────────────────────────
 datas = []
 binaries = []
 hiddenimports = []
 
-_packages = [
-    "uvicorn",
-    "fastapi",
-    "starlette",
-    "pydantic",
-    "pydantic_settings",
-    "sqlalchemy",
-    "aiosqlite",
-    "passlib",
-    "jose",
-    "multipart",
-    "google.genai",
-    "google.ai",
-    "langchain",
-    "langchain_community",
-    "langchain_google_genai",
-    "chromadb",
-    "sentence_transformers",
-    "tavily",
-    "httpx",
-    "anyio",
-    "click",
-    "h11",
-    "httptools",
-    "websockets",
-    "watchfiles",
-    "python_dotenv",
-    "dotenv",
-]
-
-for _pkg in _packages:
+for _pkg in _all_packages:
     try:
         _d, _b, _h = collect_all(_pkg)
         datas += _d
         binaries += _b
         hiddenimports += _h
+        print(f"[OK]   collect_all({_pkg!r})")
     except Exception as _e:
         print(f"[WARN] collect_all({_pkg!r}) skipped: {_e}")
 
