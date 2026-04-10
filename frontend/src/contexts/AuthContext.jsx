@@ -61,6 +61,7 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider')
+  // Return safe fallback during HMR / before AuthProvider mounts
+  if (!ctx) return { user: null, loading: true, login: async () => {}, logout: () => {} }
   return ctx
 }
