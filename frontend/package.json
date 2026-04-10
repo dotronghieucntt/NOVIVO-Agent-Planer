@@ -51,6 +51,7 @@
   "build": {
     "appId": "com.novivo.agentplaner",
     "productName": "NOVIVO Agent Planer",
+    "copyright": "Copyright © 2026 NOVIVO",
     "directories": {
       "output": "dist-electron"
     },
@@ -63,15 +64,24 @@
         "from": "../dist-backend/novivo_backend",
         "to": "backend/novivo_backend",
         "filter": ["**/*"]
+      },
+      {
+        "from": "public/icon.ico",
+        "to": "icon.ico"
       }
     ],
     "win": {
       "target": [
-        { "target": "nsis",     "arch": ["x64"] },
-        { "target": "zip",      "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
       ],
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "artifactName": "NOVIVO-Agent-Planer-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "NOVIVO Agent Planer"
     }
   }
 }
