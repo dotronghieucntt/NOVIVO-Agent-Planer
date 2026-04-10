@@ -68,7 +68,7 @@ def _extract_text(response) -> str:
 
 
 async def generate_text(prompt: str, temperature: float = 0.8) -> str:
-    """Single-turn text generation with retry on 503/429."""
+    """Single-turn text generation with retry on 503/429 (fully async, non-blocking)."""
     import asyncio
     from google.genai import errors as _errs
 
@@ -77,12 +77,11 @@ async def generate_text(prompt: str, temperature: float = 0.8) -> str:
     config = types.GenerateContentConfig(temperature=temperature)
 
     last_exc = None
-    for attempt in range(4):  # 4 attempts: 0, 5, 15, 45s
+    for attempt in range(3):  # 3 attempts: 0s, 5s, 15s
         if attempt > 0:
-            wait = 5 * (3 ** (attempt - 1))  # 5, 15, 45
-            await asyncio.sleep(wait)
+            await asyncio.sleep(5 * attempt)  # 5s, 10s
         try:
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model=model,
                 contents=prompt,
                 config=config,
@@ -101,11 +100,11 @@ async def generate_text(prompt: str, temperature: float = 0.8) -> str:
 
 
 async def stream_text(prompt: str, temperature: float = 0.8) -> AsyncGenerator[str, None]:
-    """Streaming text generation for real-time chat UI."""
+    """Streaming text generation for real-time chat UI (async, non-blocking)."""
     client = _get_client()
     model = _get_effective_model()
     config = types.GenerateContentConfig(temperature=temperature)
-    for chunk in client.models.generate_content_stream(
+    async for chunk in await client.aio.models.generate_content_stream(
         model=model,
         contents=prompt,
         config=config,
@@ -138,11 +137,11 @@ async def chat_completion(
     )
 
     last_exc = None
-    for attempt in range(4):
+    for attempt in range(3):  # 3 attempts: 0s, 5s, 10s
         if attempt > 0:
-            await asyncio.sleep(5 * (3 ** (attempt - 1)))
+            await asyncio.sleep(5 * attempt)
         try:
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model=model,
                 contents=contents,
                 config=config,
