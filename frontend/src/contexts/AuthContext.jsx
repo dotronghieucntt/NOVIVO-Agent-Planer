@@ -21,9 +21,14 @@ export function AuthProvider({ children }) {
     if (token) {
       authApi.me()
         .then((res) => setUser(extractUser(res.data)))
-        .catch(() => {
+        .catch((err) => {
           localStorage.removeItem('token')
-          window.location.href = '/login'
+          // Only redirect if it's actually a 401 (expired), not a network error
+          if (err.response?.status === 401) {
+            window.location.href = '/login'
+          } else {
+            setLoading(false)
+          }
         })
         .finally(() => setLoading(false))
     } else {
