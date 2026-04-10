@@ -130,42 +130,34 @@ async def test_gemini(
         raise HTTPException(status_code=400, detail="Chưa cấu hình Gemini API Key")
 
     model = body.model or get_setting(db, "gemini_model") or "gemini-2.5-flash"
-    # Luôn dùng flash để test key (nhanh, không bị overload như Pro)
-    test_model = "gemini-2.5-flash"
     try:
-        client = genai.Client(api_key=key)
-        resp = client.models.generate_content(
-            model=test_model,
-            contents="Reply with exactly one word: OK",
-            config=types.GenerateContentConfig(temperature=0, max_output_tokens=8),
-        )
-        # Handle thinking models where resp.text may be None and parts may be None
-        text = resp.text or ""
-        if not text:
-            for cand in (resp.candidates or []):
-                content_parts = getattr(cand.content, "parts", None) or []
-                parts = [p.text for p in content_parts if getattr(p, "text", None) and not getattr(p, 'thought', False)]
-                if parts:
-                    text = "".join(parts)
-                    break
-        if not text:
-            text = "OK"  # Model responded but returned no visible text (thinking-only response)
-        return {"ok": True, "response": text.strip(), "model": model}
+        import urllib.request as _req
+        import json as _json
+
+        # Validate key bằng models.list — không tốn token, không bị 503 overload
+        _url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}&pageSize=1"
+        _r = _req.urlopen(_req.Request(_url, headers={"User-Agent": "NOVIVO/1.0"}), timeout=10)
+        _data = _json.loads(_r.read())
+        if "models" not in _data:
+            raise ValueError("Response không hợp lệ từ Gemini API")
+        return {"ok": True, "response": "Key hợp lệ", "model": model}
     except Exception as e:
-        import logging, traceback
-        logging.getLogger("settings").error("test-gemini error: %s\n%s", e, traceback.format_exc())
+        import logging
+        logging.getLogger("settings").error("test-gemini error: %s", e)
         msg = str(e)
         status = 400
         if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
             status = 429
-            detail = "Gemini API đã hết quota hoặc vượt spending cap. Vào https://aistudio.google.com để kiểm tra."
+            detail = "Gemini API đã hết quota / vượt spending cap."
         elif "503" in msg or "UNAVAILABLE" in msg:
             status = 503
             detail = "Gemini API đang quá tải — thử lại sau vài phút."
-        elif "401" in msg or "API_KEY_INVALID" in msg:
+        elif "400" in msg or "API_KEY" in msg or "invalid" in msg.lower():
             detail = "API Key không hợp lệ."
+        elif "401" in msg:
+            detail = "API Key không có quyền truy cập."
         else:
-            detail = f"Lỗi kết nối Gemini: {e}"
+            detail = f"Không kết nối được Gemini: {msg[:120]}"
         raise HTTPException(status_code=status, detail=detail)
 
 
