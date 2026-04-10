@@ -135,24 +135,158 @@ function startBackend() {
 }
 
 // ── Loading splash HTML ──────────────────────────────────────────────────────
-const LOADING_HTML = `data:text/html;charset=utf-8,<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>NOVIVO</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f13;display:flex;align-items:center;justify-content:center;
-     height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#fff}
-.wrap{text-align:center}
-.logo{font-size:32px;font-weight:800;letter-spacing:2px;
-      background:linear-gradient(135deg,#a78bfa,#8b5cf6);
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
-.sub{font-size:13px;color:#6b7280;margin-bottom:28px}
-.spinner{width:32px;height:32px;border:3px solid #1f1f2e;border-top-color:#8b5cf6;
-         border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
-@keyframes spin{to{transform:rotate(360deg)}}</style></head>
-<body><div class="wrap">
-<div class="logo">NOVIVO</div>
-<div class="sub">AI Content Planer</div>
-<div class="spinner"></div>
-</div></body></html>`
+const SPLASH_HTML = `<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><title>NOVIVO</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  background:#08080f;
+  display:flex;align-items:center;justify-content:center;
+  height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  color:#fff;
+  position:relative;
+}
+/* ambient glow */
+.glow{
+  position:fixed;
+  width:700px;height:700px;
+  background:radial-gradient(circle,rgba(109,40,217,.18) 0%,transparent 65%);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  animation:glow-pulse 3s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes glow-pulse{
+  0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(1)}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}
+}
+/* card */
+.wrap{
+  text-align:center;
+  position:relative;z-index:1;
+  width:340px;
+  animation:fade-in .6s ease both;
+}
+@keyframes fade-in{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+/* icon box */
+.icon-box{
+  width:80px;height:80px;
+  background:linear-gradient(135deg,#7c3aed,#5b21b6);
+  border-radius:22px;
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 22px;
+  box-shadow:0 0 0 1px rgba(139,92,246,.3),0 0 40px rgba(109,40,217,.5);
+  animation:icon-pulse 2.5s ease-in-out infinite;
+  font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px;
+  user-select:none;
+}
+@keyframes icon-pulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(139,92,246,.3),0 0 35px rgba(109,40,217,.4)}
+  50%{box-shadow:0 0 0 1px rgba(167,139,250,.6),0 0 65px rgba(109,40,217,.75)}
+}
+/* shimmer logo text */
+.logo-text{
+  font-size:40px;font-weight:900;letter-spacing:5px;
+  background:linear-gradient(90deg,#7c3aed 0%,#a78bfa 30%,#ede9fe 50%,#a78bfa 70%,#7c3aed 100%);
+  background-size:250% 100%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:shimmer 2.2s linear infinite;
+  margin-bottom:8px;
+}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.sub{
+  font-size:11px;color:#4b5563;letter-spacing:3px;
+  text-transform:uppercase;margin-bottom:38px;
+}
+/* progress */
+.progress-wrap{
+  width:100%;height:3px;background:#12121e;border-radius:2px;
+  overflow:hidden;margin-bottom:18px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.progress-bar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#6d28d9,#a78bfa,#6d28d9);
+  background-size:200% 100%;
+  border-radius:2px;
+  transition:width .6s cubic-bezier(.4,0,.2,1);
+  animation:bar-shine 1.8s linear infinite;
+  box-shadow:0 0 10px rgba(139,92,246,.7);
+}
+@keyframes bar-shine{0%{background-position:100% 0}100%{background-position:-100% 0}}
+/* status */
+.status{
+  font-size:12px;color:#6b7280;letter-spacing:.5px;
+  min-height:18px;
+  transition:opacity .35s ease,transform .35s ease;
+}
+.status.hide{opacity:0;transform:translateY(5px)}
+/* dots */
+.dots{margin-top:32px;display:flex;justify-content:center;gap:8px}
+.dot{
+  width:5px;height:5px;border-radius:50%;
+  background:#7c3aed;opacity:.25;
+  animation:blink 1.4s ease-in-out infinite;
+}
+.dot:nth-child(2){animation-delay:.22s}
+.dot:nth-child(3){animation-delay:.44s}
+@keyframes blink{0%,80%,100%{opacity:.2;transform:scale(1)}40%{opacity:1;transform:scale(1.5)}}
+/* version */
+.ver{position:fixed;bottom:18px;right:22px;font-size:10px;color:#27272a;letter-spacing:1px}
+</style></head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+  <div class="icon-box">N</div>
+  <div class="logo-text">NOVIVO</div>
+  <div class="sub">AI Content Planner</div>
+  <div class="progress-wrap"><div class="progress-bar" id="bar"></div></div>
+  <div class="status" id="status">Đang khởi động...</div>
+  <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+</div>
+<div class="ver">v1.0.0</div>
+<script>
+const MESSAGES = [
+  'Đang khởi động hệ thống...',
+  'Nạp mô hình AI...',
+  'Kết nối cơ sở dữ liệu...',
+  'Tải kiến thức RAG engine...',
+  'Khởi tạo các dịch vụ...',
+  'Chuẩn bị giao diện...',
+  'Sắp hoàn tất...',
+];
+const TOTAL_MS = 32000;
+const TICK = 400;
+const bar = document.getElementById('bar');
+const statusEl = document.getElementById('status');
+let elapsed = 0, msgIdx = 0;
+
+function nextMsg() {
+  statusEl.classList.add('hide');
+  setTimeout(() => {
+    msgIdx = Math.min(msgIdx + 1, MESSAGES.length - 1);
+    statusEl.textContent = MESSAGES[msgIdx];
+    statusEl.classList.remove('hide');
+  }, 350);
+}
+
+const timer = setInterval(() => {
+  elapsed += TICK;
+  const r = elapsed / TOTAL_MS;
+  // ease-out curve: slow approach to 93%
+  const pct = Math.min(93, 100 * (1 - Math.pow(1 - r, 2.2)));
+  bar.style.width = pct + '%';
+  const step = Math.floor(elapsed / 4200);
+  if (step > msgIdx && msgIdx < MESSAGES.length - 1) nextMsg();
+  if (elapsed >= TOTAL_MS) clearInterval(timer);
+}, TICK);
+</script>
+</body></html>`
+
+function getSplashURL() {
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(SPLASH_HTML)
+}
 
 // ── Create main window ───────────────────────────────────────────────────────
 async function createWindow() {
@@ -189,7 +323,7 @@ async function createWindow() {
 
   if (!isDev) {
     // Show splash immediately
-    await mainWindow.loadURL(LOADING_HTML)
+    await mainWindow.loadURL(getSplashURL())
     mainWindow.show()
 
     // Start backend then wait for it
