@@ -94,8 +94,9 @@ function AiTopicCard({ topic, index, onSelect, onSaveAsIdea, selected }) {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07 }}
+      onClick={() => !selected && onSelect(topic)}
       className={cn(
-        'glass-card p-4 group transition-all duration-200 select-none',
+        'glass-card p-4 group transition-all duration-200 select-none cursor-pointer',
         selected ? 'border-brand-500/60 shadow-lg shadow-brand-600/10' : 'hover:border-brand-500/30'
       )}
     >
@@ -111,14 +112,14 @@ function AiTopicCard({ topic, index, onSelect, onSaveAsIdea, selected }) {
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button
-            onClick={() => onSaveAsIdea(topic)}
+            onClick={(e) => { e.stopPropagation(); onSaveAsIdea(topic) }}
             className="btn-icon text-brand-400 hover:text-brand-300"
             title="Lưu vào danh sách ý tưởng"
           >
             <Plus size={13} />
           </button>
           <button
-            onClick={() => onSelect(topic)}
+            onClick={(e) => { e.stopPropagation(); onSelect(topic) }}
             className="btn-icon text-purple-400 hover:text-purple-300"
             title="Tạo kịch bản ngay"
           >
