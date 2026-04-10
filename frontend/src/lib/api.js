@@ -41,6 +41,17 @@ novivoApi.interceptors.request.use((config) => {
   return config
 })
 
+novivoApi.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('token')
+      setTimeout(() => { window.location.href = '/login' }, 300)
+    }
+    return Promise.reject(err)
+  },
+)
+
 // ─── Auth (via NOVIVO API) ───────────────────────────────────────────────────
 export const authApi = {
   login: (username, password) =>

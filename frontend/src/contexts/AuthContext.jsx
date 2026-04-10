@@ -21,7 +21,10 @@ export function AuthProvider({ children }) {
     if (token) {
       authApi.me()
         .then((res) => setUser(extractUser(res.data)))
-        .catch(() => localStorage.removeItem('token'))
+        .catch(() => {
+          localStorage.removeItem('token')
+          window.location.href = '/login'
+        })
         .finally(() => setLoading(false))
     } else {
       setLoading(false)
