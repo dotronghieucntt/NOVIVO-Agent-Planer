@@ -8,33 +8,47 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow
 let backendProcess
-let logStream = null
 
-// ── Logger (ghi file + console) ──────────────────────────────────────────────
+// ── Logger (ghi file SYNC – đảm bảo không mất log khi crash) ────────────────
 function initLogger() {
-  const logDir = isDev
-    ? path.join(__dirname, '../../logs')
-    : path.join(app.getPath('userData'), 'logs')
-
-  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+  let logDir
+  try {
+    if (isDev) {
+      logDir = path.join(__dirname, '../../logs')
+    } else if (process.env.PORTABLE_EXECUTABLE_DIR) {
+      // Portable exe: ghi log cạnh file .exe cho dễ tìm
+      logDir = path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'NOVIVO-logs')
+    } else {
+      logDir = path.join(app.getPath('userData'), 'logs')
+    }
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+  } catch (e) {
+    // Fallback về temp nếu không tạo được
+    logDir = require('os').tmpdir()
+  }
 
   // Rotate: giữ 5 file gần nhất
-  const files = fs.readdirSync(logDir)
-    .filter(f => f.startsWith('novivo-') && f.endsWith('.log'))
-    .sort().reverse()
-  files.slice(4).forEach(f => {
-    try { fs.unlinkSync(path.join(logDir, f)) } catch {}
-  })
+  try {
+    const files = fs.readdirSync(logDir)
+      .filter(f => f.startsWith('novivo-') && f.endsWith('.log'))
+      .sort().reverse()
+    files.slice(4).forEach(f => {
+      try { fs.unlinkSync(path.join(logDir, f)) } catch {}
+    })
+  } catch {}
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const logFile = path.join(logDir, `novivo-${stamp}.log`)
-  logStream = fs.createWriteStream(logFile, { flags: 'a', encoding: 'utf8' })
 
+  // Tạo file ngay lập tức (sync) để chắc chắn file tồn tại
+  try { fs.writeFileSync(logFile, '', { encoding: 'utf8' }) } catch {}
+
+  // Ghi SYNC – mỗi dòng ghi thẳng xuống đĩa, không buffer
   const write = (level, ...args) => {
     const line = `[${new Date().toISOString()}] [${level}] ${args.map(a =>
       typeof a === 'object' ? JSON.stringify(a) : String(a)
     ).join(' ')}\n`
-    logStream.write(line)
+    try { fs.appendFileSync(logFile, line, 'utf8') } catch {}
     if (level === 'ERROR') process.stderr.write(line)
     else process.stdout.write(line)
   }
@@ -44,6 +58,7 @@ function initLogger() {
     warn:  (...a) => write('WARN',  ...a),
     error: (...a) => write('ERROR', ...a),
     path:  () => logFile,
+    dir:   () => logDir,
   }
 
   // Capture unhandled errors
@@ -52,7 +67,9 @@ function initLogger() {
 
   global.log.info('=== NOVIVO started ===')
   global.log.info('Log file:', logFile)
+  global.log.info('Log dir:', logDir)
   global.log.info('userData:', isDev ? 'DEV' : app.getPath('userData'))
+  global.log.info('PORTABLE_EXECUTABLE_DIR:', process.env.PORTABLE_EXECUTABLE_DIR || '(none)')
   return logFile
 }
 
@@ -84,23 +101,27 @@ function waitForBackend(maxAttempts = 40) {
 function startBackend() {
   if (isDev) return
 
-  const backendDir = path.join(process.resourcesPath, 'backend', 'novivo_backend')
-  const exePath    = path.join(backendDir, 'novivo_backend.exe')
+  const backendDir  = path.join(process.resourcesPath, 'backend', 'novivo_backend')
+  const exePath     = path.join(backendDir, 'novivo_backend.exe')
   const userDataDir = app.getPath('userData')
-  const logDir     = path.join(userDataDir, 'logs')
 
   if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true })
-  if (!fs.existsSync(logDir))      fs.mkdirSync(logDir, { recursive: true })
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const backendLog = path.join(logDir, `backend-${stamp}.log`)
-  const backendLogStream = fs.createWriteStream(backendLog, { flags: 'a', encoding: 'utf8' })
+  // Ghi backend log vào cùng thư mục log với main (PORTABLE_EXECUTABLE_DIR hoặc userData)
+  const logDir = global.log.dir()
+  const stamp  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const backendLogFile = path.join(logDir, `backend-${stamp}.log`)
+  try { fs.writeFileSync(backendLogFile, '', 'utf8') } catch {}
+
+  const writeBackend = (tag, line) => {
+    try { fs.appendFileSync(backendLogFile, `${tag} ${line}\n`, 'utf8') } catch {}
+  }
 
   const dbPath     = path.join(userDataDir, 'content_planner.db').replace(/\\/g, '/')
   const chromaPath = path.join(userDataDir, 'chroma_data').replace(/\\/g, '/')
 
   global.log.info('Starting backend:', exePath)
-  global.log.info('Backend log:', backendLog)
+  global.log.info('Backend log:', backendLogFile)
 
   backendProcess = spawn(exePath, [], {
     cwd: userDataDir,
@@ -113,16 +134,13 @@ function startBackend() {
   })
 
   backendProcess.stdout.on('data', d => {
-    const line = d.toString().trimEnd()
-    backendLogStream.write(`[STDOUT] ${line}\n`)
+    d.toString().split('\n').filter(Boolean).forEach(l => writeBackend('[OUT]', l))
   })
   backendProcess.stderr.on('data', d => {
-    const line = d.toString().trimEnd()
-    backendLogStream.write(`[STDERR] ${line}\n`)
-    // Also mirror uvicorn errors to main log
-    if (line.includes('ERROR') || line.includes('Traceback')) {
-      global.log.error('[backend]', line)
-    }
+    d.toString().split('\n').filter(Boolean).forEach(l => {
+      writeBackend('[ERR]', l)
+      if (l.includes('ERROR') || l.includes('Traceback')) global.log.error('[backend]', l)
+    })
   })
 
   backendProcess.on('error', (err) => {
@@ -130,7 +148,6 @@ function startBackend() {
   })
   backendProcess.on('exit', (code, signal) => {
     global.log.warn(`Backend exited: code=${code} signal=${signal}`)
-    backendLogStream.end()
   })
 }
 
@@ -359,7 +376,6 @@ app.on('window-all-closed', () => {
     backendProcess = null
   }
   global.log && global.log.info('App closing')
-  if (logStream) logStream.end()
   if (process.platform !== 'darwin') app.quit()
 })
 
