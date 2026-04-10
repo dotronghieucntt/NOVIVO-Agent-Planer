@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('token')
           // Only redirect if it's actually a 401 (expired), not a network error
           if (err.response?.status === 401) {
-            window.location.href = '/login'
+            window.location.href = '/#/login'
           } else {
             setLoading(false)
           }

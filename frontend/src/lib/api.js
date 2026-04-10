@@ -21,7 +21,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       // Small delay so any toast can render before redirect
-      setTimeout(() => { window.location.href = '/login' }, 300)
+      setTimeout(() => { window.location.href = '/#/login' }, 300)
     }
     return Promise.reject(err)
   },
@@ -46,7 +46,7 @@ novivoApi.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
-      setTimeout(() => { window.location.href = '/login' }, 300)
+      setTimeout(() => { window.location.href = '/#/login' }, 300)
     }
     return Promise.reject(err)
   },
