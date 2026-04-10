@@ -54,8 +54,9 @@ def _seed_admin():
 
 
 def _seed_default_source():
-    """Create a default knowledge source and assign all unassigned docs to it."""
+    """Create a default knowledge source and seed bundled default documents on first run."""
     from models.content import KnowledgeSource, KnowledgeDocument
+    import json as _json
     db = SessionLocal()
     try:
         if not db.query(KnowledgeSource).first():
@@ -66,13 +67,36 @@ def _seed_default_source():
             )
             db.add(src)
             db.flush()
+
+            # Assign any existing unassigned docs (dev/migration)
             count = (
                 db.query(KnowledgeDocument)
                 .filter(KnowledgeDocument.source_id == None)  # noqa: E711
                 .update({"source_id": src.id})
             )
+
+            # Load bundled default_knowledge.json (shipped with the exe)
+            _here = getattr(__import__('sys'), '_MEIPASS', None) or \
+                    __import__('os').path.dirname(__file__)
+            _json_path = __import__('os').path.join(_here, 'default_knowledge.json')
+            if __import__('os').path.exists(_json_path):
+                with open(_json_path, encoding='utf-8') as _f:
+                    _docs = _json.load(_f)
+                for _d in _docs:
+                    db.add(KnowledgeDocument(
+                        title=_d.get('title', ''),
+                        category=_d.get('category'),
+                        content=_d.get('content', ''),
+                        is_embedded=0,
+                        source_id=src.id,
+                    ))
+                count += len(_docs)
+                print(f"[OK] Seeded {len(_docs)} default knowledge docs from bundle")
+            else:
+                print(f"[WARN] default_knowledge.json not found at {_json_path}")
+
             db.commit()
-            print(f"[OK] Default knowledge source created (id={src.id}), {count} docs assigned")
+            print(f"[OK] Default knowledge source created (id={src.id}), {count} docs total")
     finally:
         db.close()
 

@@ -149,23 +149,10 @@ hiddenimports += [
 ]
 
 # ── Dữ liệu đi kèm ───────────────────────────────────────────────────────────
-import os as _os
-
-def _dir_datas(src_dir: str, dest_dir: str):
-    """Collect all files in src_dir recursively into dest_dir inside exe."""
-    pairs = []
-    src = Path(_SPEC_DIR / src_dir)
-    if src.exists():
-        pairs.append((str(src), dest_dir))
-    return pairs
-
+# Thêm .env.example để user biết cần điền gì
 datas += [
-    # .env template
     (".env.example", "."),
-    # SQLite DB (seeded knowledge)
-    ("content_planner.db", "."),
-    # ChromaDB vector store (RAG knowledge)
-    *_dir_datas("chroma_data", "chroma_data"),
+    ("default_knowledge.json", "."),  # tài liệu mặc định, seed vào DB lần đầu
 ]
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
