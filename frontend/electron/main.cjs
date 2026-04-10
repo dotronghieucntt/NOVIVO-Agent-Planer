@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Menu } = require('electron')
+const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 const http = require('http')
@@ -8,6 +8,53 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow
 let backendProcess
+let logStream = null
+
+// ── Logger (ghi file + console) ──────────────────────────────────────────────
+function initLogger() {
+  const logDir = isDev
+    ? path.join(__dirname, '../../logs')
+    : path.join(app.getPath('userData'), 'logs')
+
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+
+  // Rotate: giữ 5 file gần nhất
+  const files = fs.readdirSync(logDir)
+    .filter(f => f.startsWith('novivo-') && f.endsWith('.log'))
+    .sort().reverse()
+  files.slice(4).forEach(f => {
+    try { fs.unlinkSync(path.join(logDir, f)) } catch {}
+  })
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const logFile = path.join(logDir, `novivo-${stamp}.log`)
+  logStream = fs.createWriteStream(logFile, { flags: 'a', encoding: 'utf8' })
+
+  const write = (level, ...args) => {
+    const line = `[${new Date().toISOString()}] [${level}] ${args.map(a =>
+      typeof a === 'object' ? JSON.stringify(a) : String(a)
+    ).join(' ')}\n`
+    logStream.write(line)
+    if (level === 'ERROR') process.stderr.write(line)
+    else process.stdout.write(line)
+  }
+
+  global.log = {
+    info:  (...a) => write('INFO',  ...a),
+    warn:  (...a) => write('WARN',  ...a),
+    error: (...a) => write('ERROR', ...a),
+    path:  () => logFile,
+  }
+
+  // Capture unhandled errors
+  process.on('uncaughtException',  e => global.log.error('uncaughtException:', e.stack || e))
+  process.on('unhandledRejection', e => global.log.error('unhandledRejection:', e))
+
+  global.log.info('=== NOVIVO started ===')
+  global.log.info('Log file:', logFile)
+  global.log.info('userData:', isDev ? 'DEV' : app.getPath('userData'))
+  return logFile
+}
 
 // ── Poll backend until it responds ──────────────────────────────────────────
 function waitForBackend(maxAttempts = 40) {
@@ -15,11 +62,14 @@ function waitForBackend(maxAttempts = 40) {
     let attempts = 0
     const check = () => {
       const req = http.get('http://127.0.0.1:8001/', (res) => {
+        global.log.info(`Backend ready after ${attempts + 1} poll(s)`)
         resolve()
       })
       req.on('error', () => {
         if (++attempts >= maxAttempts) {
-          reject(new Error('Backend did not start in time'))
+          const err = new Error('Backend did not start in time')
+          global.log.error(err.message)
+          reject(err)
         } else {
           setTimeout(check, 1000)
         }
@@ -37,12 +87,20 @@ function startBackend() {
   const backendDir = path.join(process.resourcesPath, 'backend', 'novivo_backend')
   const exePath    = path.join(backendDir, 'novivo_backend.exe')
   const userDataDir = app.getPath('userData')
+  const logDir     = path.join(userDataDir, 'logs')
 
-  // Ensure userData dir exists (writable, persists across updates)
   if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true })
+  if (!fs.existsSync(logDir))      fs.mkdirSync(logDir, { recursive: true })
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const backendLog = path.join(logDir, `backend-${stamp}.log`)
+  const backendLogStream = fs.createWriteStream(backendLog, { flags: 'a', encoding: 'utf8' })
 
   const dbPath     = path.join(userDataDir, 'content_planner.db').replace(/\\/g, '/')
   const chromaPath = path.join(userDataDir, 'chroma_data').replace(/\\/g, '/')
+
+  global.log.info('Starting backend:', exePath)
+  global.log.info('Backend log:', backendLog)
 
   backendProcess = spawn(exePath, [], {
     cwd: userDataDir,
@@ -51,11 +109,28 @@ function startBackend() {
       DATABASE_URL:        `sqlite:///${dbPath}`,
       CHROMA_PERSIST_DIR:  chromaPath,
     },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  backendProcess.stdout.on('data', d => {
+    const line = d.toString().trimEnd()
+    backendLogStream.write(`[STDOUT] ${line}\n`)
+  })
+  backendProcess.stderr.on('data', d => {
+    const line = d.toString().trimEnd()
+    backendLogStream.write(`[STDERR] ${line}\n`)
+    // Also mirror uvicorn errors to main log
+    if (line.includes('ERROR') || line.includes('Traceback')) {
+      global.log.error('[backend]', line)
+    }
   })
 
   backendProcess.on('error', (err) => {
-    console.error('Backend process error:', err)
+    global.log.error('Backend spawn error:', err.message)
+  })
+  backendProcess.on('exit', (code, signal) => {
+    global.log.warn(`Backend exited: code=${code} signal=${signal}`)
+    backendLogStream.end()
   })
 }
 
@@ -101,6 +176,17 @@ async function createWindow() {
     show: false,
   })
 
+  // Log renderer errors
+  mainWindow.webContents.on('render-process-gone', (e, details) => {
+    global.log.error('Renderer crashed:', JSON.stringify(details))
+  })
+  mainWindow.webContents.on('did-fail-load', (e, code, desc, url) => {
+    global.log.error(`Load failed: ${code} ${desc} url=${url}`)
+  })
+  mainWindow.webContents.on('console-message', (e, level, msg, line, src) => {
+    if (level >= 2) global.log.error(`[renderer] ${msg} (${src}:${line})`)
+  })
+
   if (!isDev) {
     // Show splash immediately
     await mainWindow.loadURL(LOADING_HTML)
@@ -111,11 +197,12 @@ async function createWindow() {
     try {
       await waitForBackend()
     } catch (e) {
-      console.error('Backend timeout, loading app anyway:', e.message)
+      global.log.error('Backend timeout, loading app anyway:', e.message)
     }
 
     // Load actual React app
     const appUrl = `file://${path.join(__dirname, '../dist/index.html')}`
+    global.log.info('Loading app:', appUrl)
     await mainWindow.loadURL(appUrl)
   } else {
     mainWindow.loadURL('http://localhost:5173')
@@ -127,6 +214,7 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  initLogger()
   Menu.setApplicationMenu(null)
   createWindow()
 })
@@ -136,6 +224,8 @@ app.on('window-all-closed', () => {
     backendProcess.kill()
     backendProcess = null
   }
+  global.log && global.log.info('App closing')
+  if (logStream) logStream.end()
   if (process.platform !== 'darwin') app.quit()
 })
 
