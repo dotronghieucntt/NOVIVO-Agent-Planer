@@ -4,6 +4,16 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import traceback
 import logging
+import sys
+import io
+
+# Ensure stdout/stderr use UTF-8 in frozen exe (Windows cp1252 default breaks emoji)
+if hasattr(sys.stdout, 'reconfigure'):
+    try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception: pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try: sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception: pass
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("deps").setLevel(logging.DEBUG)
@@ -38,7 +48,7 @@ def _seed_admin():
             )
             db.add(admin)
             db.commit()
-            print("✅ Default admin created: admin / Admin@123  — CHANGE THIS PASSWORD!")
+            print("[OK] Default admin created: admin / Admin@123 -- CHANGE THIS PASSWORD!")
     finally:
         db.close()
 
@@ -62,7 +72,7 @@ def _seed_default_source():
                 .update({"source_id": src.id})
             )
             db.commit()
-            print(f"✅ Default knowledge source created (id={src.id}), {count} docs assigned")
+            print(f"[OK] Default knowledge source created (id={src.id}), {count} docs assigned")
     finally:
         db.close()
 
