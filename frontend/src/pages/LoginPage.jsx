@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import toast from 'react-hot-toast'
+import logoIcon from '/logo-icon.png'
 
 const REMEMBER_KEY = 'novivo_remembered'
 
@@ -67,7 +68,7 @@ export default function LoginPage() {
         <div className="glass-card p-8">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <img src="/logo-icon.png" alt="NOVIVO" className="w-20 h-20 object-contain mb-4" />
+            <img src={logoIcon} alt="NOVIVO" className="w-20 h-20 object-contain mb-4" />
             <p className="text-sm text-secondary">Đăng nhập để bắt đầu sáng tạo</p>
           </div>
 

@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { cn, formatDate } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { planningApi } from '@/lib/api'
+import logoFull from '/logo-full.png'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'manager']
 
@@ -38,7 +39,7 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="px-4 py-4 flex items-center gap-2">
-        <img src="/logo-full.png" alt="NOVIVO" className="h-20 object-contain" />
+        <img src={logoFull} alt="NOVIVO" className="h-20 object-contain" />
       </div>
 
       {/* Nav */}

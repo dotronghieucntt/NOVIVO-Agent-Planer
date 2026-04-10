@@ -1,8 +1,14 @@
 import axios from 'axios'
 
+// Detect Electron production (file:// protocol) vs dev (localhost)
+const BACKEND = window.location.protocol === 'file:'
+  ? 'http://127.0.0.1:8001'
+  : 'http://127.0.0.1:8001'
+// Always use direct backend URL so it works with both file:// and http://
+
 // ─── Local backend instance ──────────────────────────────────────────────────
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${BACKEND}/api`,
   timeout: 60000,
 })
 
@@ -118,7 +124,7 @@ export const settingsApi = {
 // ─── Chat (streaming) ────────────────────────────────────────────────────────
 export async function* streamChat({ message, history = [], scriptId = null, scriptContext = '' }) {
   const token = localStorage.getItem('token')
-  const response = await fetch('/api/chat/stream', {
+  const response = await fetch(`${BACKEND}/api/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
