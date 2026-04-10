@@ -54,6 +54,20 @@ def _is_overload_error(e: Exception) -> bool:
     return "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg or "overloaded" in msg.lower()
 
 
+def _make_config(model: str, temperature: float, system_instruction: str | None = None) -> types.GenerateContentConfig:
+    """Build GenerateContentConfig, adding thinking_budget for 2.5-series thinking models."""
+    kwargs: dict = {"temperature": temperature}
+    if system_instruction:
+        kwargs["system_instruction"] = system_instruction
+    # gemini-2.5-* only works in thinking mode — must provide a budget > 0
+    if "2.5" in model:
+        try:
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=2048)
+        except AttributeError:
+            pass  # older SDK version without ThinkingConfig
+    return types.GenerateContentConfig(**kwargs)
+
+
 def _get_client() -> genai.Client:
     global _client
     if _client is None:
@@ -83,13 +97,13 @@ async def generate_text(prompt: str, temperature: float = 0.8) -> str:
 
     client = _get_client()
     primary_model = _get_effective_model()
-    config = types.GenerateContentConfig(temperature=temperature)
 
     # Build model list: primary + fallbacks (skip duplicates)
     model_list = [primary_model] + [m for m in _FALLBACK_MODELS if m != primary_model]
 
     last_exc = None
     for model in model_list:
+        config = _make_config(model, temperature)
         for attempt in range(2):  # 2 tries per model: 0s, 5s
             if attempt > 0:
                 await asyncio.sleep(5)
@@ -116,7 +130,7 @@ async def stream_text(prompt: str, temperature: float = 0.8) -> AsyncGenerator[s
     """Streaming text generation for real-time chat UI (async, non-blocking)."""
     client = _get_client()
     model = _get_effective_model()
-    config = types.GenerateContentConfig(temperature=temperature)
+    config = _make_config(model, temperature)
     async for chunk in await client.aio.models.generate_content_stream(
         model=model,
         contents=prompt,
@@ -143,16 +157,12 @@ async def chat_completion(
     for msg in history:
         role = "user" if msg["role"] == "user" else "model"
         contents.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        system_instruction=system_prompt,
-    )
-
     primary_model = _get_effective_model()
     model_list = [primary_model] + [m for m in _FALLBACK_MODELS if m != primary_model]
 
     last_exc = None
     for model in model_list:
+        config = _make_config(model, temperature, system_instruction=system_prompt)
         for attempt in range(2):
             if attempt > 0:
                 await asyncio.sleep(5)
