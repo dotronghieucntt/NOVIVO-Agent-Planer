@@ -28,6 +28,10 @@ def _get_effective_key() -> str:
     return settings.GEMINI_API_KEY
 
 
+# Fallback chain when primary model is overloaded
+_FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+
+
 def _get_effective_model() -> str:
     """Read Gemini model from DB first, fall back to .env."""
     try:
@@ -43,6 +47,11 @@ def _get_effective_model() -> str:
     except Exception:
         pass
     return settings.GEMINI_MODEL
+
+
+def _is_overload_error(e: Exception) -> bool:
+    msg = str(e)
+    return "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg or "overloaded" in msg.lower()
 
 
 def _get_client() -> genai.Client:
@@ -68,33 +77,37 @@ def _extract_text(response) -> str:
 
 
 async def generate_text(prompt: str, temperature: float = 0.8) -> str:
-    """Single-turn text generation with retry on 503/429 (fully async, non-blocking)."""
+    """Single-turn text generation. Tries primary model with 2 retries, then falls back to flash models."""
     import asyncio
     from google.genai import errors as _errs
 
     client = _get_client()
-    model = _get_effective_model()
+    primary_model = _get_effective_model()
     config = types.GenerateContentConfig(temperature=temperature)
 
+    # Build model list: primary + fallbacks (skip duplicates)
+    model_list = [primary_model] + [m for m in _FALLBACK_MODELS if m != primary_model]
+
     last_exc = None
-    for attempt in range(3):  # 3 attempts: 0s, 5s, 15s
-        if attempt > 0:
-            await asyncio.sleep(5 * attempt)  # 5s, 10s
-        try:
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=config,
-            )
-            return _extract_text(response)
-        except (_errs.ServerError, _errs.ClientError) as e:
-            msg = str(e)
-            if "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                last_exc = e
-                continue  # retry
-            raise  # other errors: propagate immediately
-        except Exception:
-            raise
+    for model in model_list:
+        for attempt in range(2):  # 2 tries per model: 0s, 5s
+            if attempt > 0:
+                await asyncio.sleep(5)
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config,
+                )
+                return _extract_text(response)
+            except (_errs.ServerError, _errs.ClientError) as e:
+                if _is_overload_error(e):
+                    last_exc = e
+                    continue  # retry same model
+                raise
+            except Exception:
+                raise
+        # Both attempts for this model failed with overload → try next model
 
     raise last_exc
 
@@ -126,7 +139,6 @@ async def chat_completion(
     from google.genai import errors as _errs
 
     client = _get_client()
-    model = _get_effective_model()
     contents = []
     for msg in history:
         role = "user" if msg["role"] == "user" else "model"
@@ -136,23 +148,27 @@ async def chat_completion(
         system_instruction=system_prompt,
     )
 
+    primary_model = _get_effective_model()
+    model_list = [primary_model] + [m for m in _FALLBACK_MODELS if m != primary_model]
+
     last_exc = None
-    for attempt in range(3):  # 3 attempts: 0s, 5s, 10s
-        if attempt > 0:
-            await asyncio.sleep(5 * attempt)
-        try:
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
-            )
-            return _extract_text(response)
-        except (_errs.ServerError, _errs.ClientError) as e:
-            msg = str(e)
-            if "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                last_exc = e
-                continue
-            raise
-        except Exception:
-            raise
+    for model in model_list:
+        for attempt in range(2):
+            if attempt > 0:
+                await asyncio.sleep(5)
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                return _extract_text(response)
+            except (_errs.ServerError, _errs.ClientError) as e:
+                if _is_overload_error(e):
+                    last_exc = e
+                    continue
+                raise
+            except Exception:
+                raise
+
     raise last_exc
