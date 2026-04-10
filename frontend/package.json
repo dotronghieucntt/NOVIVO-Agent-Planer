@@ -2,6 +2,8 @@
   "name": "ai-content-planner",
   "private": true,
   "version": "1.0.0",
+  "description": "NOVIVO AI Content Planer – lên kế hoạch nội dung thông minh với AI",
+  "author": "NOVIVO <support@novivo.net>",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -64,10 +66,12 @@
         "from": "../dist-backend/novivo_backend",
         "to": "backend/novivo_backend",
         "filter": ["**/*"]
-      },
+      }
+    ],
+    "extraFiles": [
       {
         "from": "public/icon.ico",
-        "to": "icon.ico"
+        "to": "resources/icon.ico"
       }
     ],
     "win": {
@@ -75,13 +79,7 @@
         { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "public/icon.ico",
-      "artifactName": "NOVIVO-Agent-Planer-${version}-portable.exe"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "NOVIVO Agent Planer"
+      "artifactName": "NOVIVO-Setup-${version}.exe"
     }
   }
 }
