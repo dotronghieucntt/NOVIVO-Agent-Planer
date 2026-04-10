@@ -86,7 +86,7 @@ app.whenReady().then(async () => {
   if (!isDev) {
     startBackend()
     try {
-      await waitForBackend('http://127.0.0.1:8001/api/health', 60, 500)
+      await waitForBackend('http://127.0.0.1:8001/health', 60, 500)
     } catch {
       // Backend chậm khởi động, tiếp tục mở window
     }
