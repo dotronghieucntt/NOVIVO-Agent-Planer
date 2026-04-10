@@ -4,7 +4,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     APP_NAME: str = "AI Content Planner"
-    DEBUG: bool = True
+    DEBUG: bool = False  # Set via env var DEBUG=true for development
     DATABASE_URL: str = "sqlite:///./content_planner.db"
 
     # Security

@@ -120,4 +120,7 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=settings.DEBUG)
+    # Production: port 8001, no reload (reload=True breaks portable exe - watchfiles
+    # restarts backend on every DB write, and reload env var can be set for dev)
+    _reload = settings.DEBUG and not getattr(__import__('sys'), 'frozen', False)
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=_reload)
