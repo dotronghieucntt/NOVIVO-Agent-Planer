@@ -56,10 +56,12 @@ def _seed_admin():
 def _seed_default_source():
     """Create a default knowledge source and seed bundled default documents on first run."""
     from models.content import KnowledgeSource, KnowledgeDocument
-    import json as _json
+    import json as _json, os as _os, sys as _sys
+
     db = SessionLocal()
     try:
-        if not db.query(KnowledgeSource).first():
+        src = db.query(KnowledgeSource).first()
+        if not src:
             src = KnowledgeSource(
                 name="Mặc định",
                 description="Nguồn dữ liệu ban đầu",
@@ -67,19 +69,17 @@ def _seed_default_source():
             )
             db.add(src)
             db.flush()
-
             # Assign any existing unassigned docs (dev/migration)
-            count = (
-                db.query(KnowledgeDocument)
-                .filter(KnowledgeDocument.source_id == None)  # noqa: E711
-                .update({"source_id": src.id})
-            )
+            db.query(KnowledgeDocument) \
+              .filter(KnowledgeDocument.source_id == None) \
+              .update({"source_id": src.id})  # noqa: E711
 
-            # Load bundled default_knowledge.json (shipped with the exe)
-            _here = getattr(__import__('sys'), '_MEIPASS', None) or \
-                    __import__('os').path.dirname(__file__)
-            _json_path = __import__('os').path.join(_here, 'default_knowledge.json')
-            if __import__('os').path.exists(_json_path):
+        # Seed bundled docs if source still has no documents
+        doc_count = db.query(KnowledgeDocument).filter(KnowledgeDocument.source_id == src.id).count()
+        if doc_count == 0:
+            _here = getattr(_sys, '_MEIPASS', None) or _os.path.dirname(__file__)
+            _json_path = _os.path.join(_here, 'default_knowledge.json')
+            if _os.path.exists(_json_path):
                 with open(_json_path, encoding='utf-8') as _f:
                     _docs = _json.load(_f)
                 for _d in _docs:
@@ -90,13 +90,13 @@ def _seed_default_source():
                         is_embedded=0,
                         source_id=src.id,
                     ))
-                count += len(_docs)
-                print(f"[OK] Seeded {len(_docs)} default knowledge docs from bundle")
+                db.commit()
+                print(f"[OK] Seeded {len(_docs)} default knowledge docs (source id={src.id})")
             else:
                 print(f"[WARN] default_knowledge.json not found at {_json_path}")
-
+                db.commit()
+        else:
             db.commit()
-            print(f"[OK] Default knowledge source created (id={src.id}), {count} docs total")
     finally:
         db.close()
 
