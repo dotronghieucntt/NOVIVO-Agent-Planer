@@ -120,7 +120,11 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    # Production: port 8001, no reload (reload=True breaks portable exe - watchfiles
-    # restarts backend on every DB write, and reload env var can be set for dev)
-    _reload = settings.DEBUG and not getattr(__import__('sys'), 'frozen', False)
-    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=_reload)
+    import sys as _sys
+    if getattr(_sys, 'frozen', False):
+        # Frozen exe (PyInstaller): pass app object directly so uvicorn never
+        # tries to import via string (which triggers watchfiles reloader).
+        # reload=False is mandatory – watchfiles restarts the exe endlessly.
+        uvicorn.run(app, host="127.0.0.1", port=8001, reload=False)
+    else:
+        uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=settings.DEBUG)
