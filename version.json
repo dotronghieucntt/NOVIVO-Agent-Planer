@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "build": 1,
+  "date": "2026-04-10",
+  "app_name": "NOVIVO Agent Planer",
+  "description": "AI Content Planner cho TikTok & Reels - Powered by Gemini AI",
+  "changelog": [
+    "v1.0.0 (2026-04-10): Phiên bản ra mắt",
+    "- Tạo ý tưởng nội dung tự động bằng Gemini 2.5 Flash",
+    "- Viết kịch bản video AI (TikTok/Reels)",
+    "- Thư viện RAG tìm kiếm thông minh (bigram + title boost + chuẩn hóa tiếng Việt)",
+    "- Kanban board quản lý nội dung theo trạng thái",
+    "- Hỗ trợ AI video: HeyGen, ElevenLabs, Runway, Pika, CapCut AI",
+    "- Quản lý ý tưởng hàng ngày (thêm/sửa/xóa/lưu)",
+    "- Hệ thống RAG với ChromaDB + SQLite fallback",
+    "- Tìm kiếm web real-time qua Tavily"
+  ]
+}
