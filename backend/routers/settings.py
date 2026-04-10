@@ -130,12 +130,14 @@ async def test_gemini(
         raise HTTPException(status_code=400, detail="Chưa cấu hình Gemini API Key")
 
     model = body.model or get_setting(db, "gemini_model") or "gemini-2.5-flash"
+    # Luôn dùng flash để test key (nhanh, không bị overload như Pro)
+    test_model = "gemini-2.5-flash"
     try:
         client = genai.Client(api_key=key)
         resp = client.models.generate_content(
-            model=model,
-            contents="Reply with exactly: OK",
-            config=types.GenerateContentConfig(temperature=0, max_output_tokens=16),
+            model=test_model,
+            contents="Reply with exactly one word: OK",
+            config=types.GenerateContentConfig(temperature=0, max_output_tokens=8),
         )
         # Handle thinking models where resp.text may be None and parts may be None
         text = resp.text or ""
