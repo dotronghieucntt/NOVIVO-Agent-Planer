@@ -68,16 +68,36 @@ def _extract_text(response) -> str:
 
 
 async def generate_text(prompt: str, temperature: float = 0.8) -> str:
-    """Single-turn text generation."""
+    """Single-turn text generation with retry on 503/429."""
+    import asyncio
+    from google.genai import errors as _errs
+
     client = _get_client()
     model = _get_effective_model()
     config = types.GenerateContentConfig(temperature=temperature)
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
-    return _extract_text(response)
+
+    last_exc = None
+    for attempt in range(4):  # 4 attempts: 0, 5, 15, 45s
+        if attempt > 0:
+            wait = 5 * (3 ** (attempt - 1))  # 5, 15, 45
+            await asyncio.sleep(wait)
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            return _extract_text(response)
+        except (_errs.ServerError, _errs.ClientError) as e:
+            msg = str(e)
+            if "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                last_exc = e
+                continue  # retry
+            raise  # other errors: propagate immediately
+        except Exception:
+            raise
+
+    raise last_exc
 
 
 async def stream_text(prompt: str, temperature: float = 0.8) -> AsyncGenerator[str, None]:
@@ -103,6 +123,9 @@ async def chat_completion(
     Multi-turn chat.
     history format: [{"role": "user"|"assistant", "content": "text"}]
     """
+    import asyncio
+    from google.genai import errors as _errs
+
     client = _get_client()
     model = _get_effective_model()
     contents = []
@@ -113,9 +136,24 @@ async def chat_completion(
         temperature=temperature,
         system_instruction=system_prompt,
     )
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=config,
-    )
-    return _extract_text(response)
+
+    last_exc = None
+    for attempt in range(4):
+        if attempt > 0:
+            await asyncio.sleep(5 * (3 ** (attempt - 1)))
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+            return _extract_text(response)
+        except (_errs.ServerError, _errs.ClientError) as e:
+            msg = str(e)
+            if "503" in msg or "UNAVAILABLE" in msg or "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                last_exc = e
+                continue
+            raise
+        except Exception:
+            raise
+    raise last_exc
