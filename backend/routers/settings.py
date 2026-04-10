@@ -137,19 +137,34 @@ async def test_gemini(
             contents="Reply with exactly: OK",
             config=types.GenerateContentConfig(temperature=0, max_output_tokens=16),
         )
-        # Handle thinking models where resp.text may be None
+        # Handle thinking models where resp.text may be None and parts may be None
         text = resp.text or ""
         if not text:
             for cand in (resp.candidates or []):
-                parts = [p.text for p in cand.content.parts if p.text and not getattr(p, 'thought', False)]
+                content_parts = getattr(cand.content, "parts", None) or []
+                parts = [p.text for p in content_parts if getattr(p, "text", None) and not getattr(p, 'thought', False)]
                 if parts:
                     text = "".join(parts)
                     break
+        if not text:
+            text = "OK"  # Model responded but returned no visible text (thinking-only response)
         return {"ok": True, "response": text.strip(), "model": model}
     except Exception as e:
         import logging, traceback
         logging.getLogger("settings").error("test-gemini error: %s\n%s", e, traceback.format_exc())
-        raise HTTPException(status_code=400, detail=f"Key không hợp lệ: {e}")
+        msg = str(e)
+        status = 400
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            status = 429
+            detail = "Gemini API đã hết quota hoặc vượt spending cap. Vào https://aistudio.google.com để kiểm tra."
+        elif "503" in msg or "UNAVAILABLE" in msg:
+            status = 503
+            detail = "Gemini API đang quá tải — thử lại sau vài phút."
+        elif "401" in msg or "API_KEY_INVALID" in msg:
+            detail = "API Key không hợp lệ."
+        else:
+            detail = f"Lỗi kết nối Gemini: {e}"
+        raise HTTPException(status_code=status, detail=detail)
 
 
 class TestTavilyRequest(BaseModel):

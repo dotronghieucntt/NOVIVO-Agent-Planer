@@ -72,6 +72,8 @@ async def plan_topics(
         )
     except Exception as e:
         err = str(e)
+        if "429" in err or "RESOURCE_EXHAUSTED" in err or "spending cap" in err.lower():
+            raise HTTPException(status_code=429, detail="Gemini API đã hết quota / vượt spending cap. Vào AI Studio để kiểm tra.")
         if "503" in err or "UNAVAILABLE" in err or "high demand" in err.lower():
             raise HTTPException(status_code=503, detail="AI đang quá tải, vui lòng thử lại sau ít phút.")
         raise HTTPException(status_code=500, detail=f"Lỗi tạo chủ đề: {err[:200]}")
@@ -95,6 +97,8 @@ async def create_script(
         )
     except Exception as e:
         err = str(e)
+        if "429" in err or "RESOURCE_EXHAUSTED" in err or "spending cap" in err.lower():
+            raise HTTPException(status_code=429, detail="Gemini API đã hết quota / vượt spending cap. Vào AI Studio để kiểm tra.")
         if "503" in err or "UNAVAILABLE" in err or "high demand" in err.lower():
             raise HTTPException(status_code=503, detail="AI đang quá tải, vui lòng thử lại sau ít phút.")
         raise HTTPException(status_code=500, detail=f"Lỗi tạo kịch bản: {err[:200]}")
