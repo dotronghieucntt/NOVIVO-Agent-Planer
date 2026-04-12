@@ -112,13 +112,6 @@ function AiTopicCard({ topic, index, onSelect, onSaveAsIdea, selected }) {
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); onSaveAsIdea(topic) }}
-            className="btn-icon text-brand-400 hover:text-brand-300"
-            title="Lưu vào danh sách ý tưởng"
-          >
-            <Plus size={13} />
-          </button>
-          <button
             onClick={(e) => { e.stopPropagation(); onSelect(topic) }}
             className="btn-icon text-purple-400 hover:text-purple-300"
             title="Tạo kịch bản ngay"
@@ -416,7 +409,27 @@ export default function PlanningPanel() {
         num_topics: numTopics,
         extra_context: `${voiceTone} | ${aiStyle}`,
       })
-      setAiTopics(res.data.topics || [])
+      const topics = res.data.topics || []
+      setAiTopics(topics)
+
+      // Auto-save tất cả ý tưởng vào DB ngay sau khi tạo
+      const saved = []
+      for (const t of topics) {
+        try {
+          const r = await planningApi.createIdea({
+            topic: t.title,
+            angle: t.angle || '',
+            channel,
+          })
+          saved.push(r.data)
+        } catch {
+          // bỏ qua nếu lưu 1 topic thất bại
+        }
+      }
+      if (saved.length > 0) {
+        setIdeas(prev => [...saved, ...prev])
+        toast.success(`Đã lưu ${saved.length} ý tưởng vào danh sách!`)
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || 'Không thể tạo chủ đề. Kiểm tra API key.'
       toast.error(msg)
@@ -595,14 +608,6 @@ export default function PlanningPanel() {
                 </button>
                 {!loadingTopics && aiTopics.length > 0 && (
                   <div className="flex gap-2">
-                    <button
-                      onClick={async () => {
-                        for (const t of aiTopics) await handleSaveAsIdea(t)
-                      }}
-                      className="text-[11px] text-brand-300 hover:text-brand-200 flex items-center gap-1"
-                    >
-                      <Plus size={11} /> Lưu tất cả
-                    </button>
                     <button onClick={handleGenerate} className="text-[11px] text-secondary hover:text-primary flex items-center gap-1">
                       <RotateCcw size={10} /> Tạo lại
                     </button>
