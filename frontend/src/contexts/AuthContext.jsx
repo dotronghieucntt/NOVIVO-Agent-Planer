@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { authApi } from '@/lib/api'
+import { authApi, goToLogin } from '@/lib/api'
 
 const AuthContext = createContext(null)
 
@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('token')
           // Only redirect if it's actually a 401 (expired), not a network error
           if (err.response?.status === 401) {
-            window.location.href = '/#/login'
+            goToLogin()
           } else {
             setLoading(false)
           }

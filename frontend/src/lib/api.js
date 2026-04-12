@@ -6,6 +6,17 @@ const BACKEND = window.location.protocol === 'file:'
   : 'http://127.0.0.1:8001'
 // Always use direct backend URL so it works with both file:// and http://
 
+// Build correct login URL regardless of protocol (file:// or http://)
+// file:// example: file:///C:/Users/.../dist/index.html  -> file:///C:/Users/.../dist/index.html#/login
+export function goToLogin() {
+  if (window.location.protocol === 'file:') {
+    const base = window.location.href.split('#')[0]
+    window.location.href = base + '#/login'
+  } else {
+    window.location.href = '/#/login'
+  }
+}
+
 // ─── Local backend instance ──────────────────────────────────────────────────
 const api = axios.create({
   baseURL: `${BACKEND}/api`,
@@ -27,7 +38,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       // Small delay so any toast can render before redirect
-      setTimeout(() => { window.location.href = '/#/login' }, 300)
+      setTimeout(() => goToLogin(), 300)
     }
     return Promise.reject(err)
   },
@@ -52,7 +63,7 @@ novivoApi.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
-      setTimeout(() => { window.location.href = '/#/login' }, 300)
+      setTimeout(() => goToLogin(), 300)
     }
     return Promise.reject(err)
   },

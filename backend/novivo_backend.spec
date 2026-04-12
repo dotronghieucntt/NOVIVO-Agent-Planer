@@ -45,7 +45,7 @@ def _scan_imports(root: Path) -> set[str]:
     return found
 
 _scanned = _scan_imports(_SPEC_DIR)
-print(f"[SCAN] Phát hiện {len(_scanned)} top-level packages từ source code")
+print(f"[SCAN] Found {len(_scanned)} top-level packages from source code")
 
 # ── Danh sách package cần collect_all (base + scanned) ───────────────────────
 # Ánh xạ tên import → tên package PyPI/collect_all thực tế
