@@ -78,7 +78,7 @@ function waitForBackend(maxAttempts = 40) {
   return new Promise((resolve, reject) => {
     let attempts = 0
     const check = () => {
-      const req = http.get('http://127.0.0.1:8001/', (res) => {
+      const req = http.get('http://127.0.0.1:8001/health', (res) => {
         global.log.info(`Backend ready after ${attempts + 1} poll(s)`)
         resolve()
       })
@@ -138,7 +138,9 @@ function startBackend() {
   })
   backendProcess.stderr.on('data', d => {
     d.toString().split('\n').filter(Boolean).forEach(l => {
-      writeBackend('[ERR]', l)
+      // Python logging writes INFO/DEBUG to stderr — don't mislabel as error
+      const tag = /^(INFO|DEBUG|WARNING):/.test(l) ? '[OUT]' : '[ERR]'
+      writeBackend(tag, l)
       if (l.includes('ERROR') || l.includes('Traceback')) global.log.error('[backend]', l)
     })
   })

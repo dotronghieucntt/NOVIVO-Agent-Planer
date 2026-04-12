@@ -61,8 +61,6 @@ def _get_novivo_user(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.debug("NOVIVO /auth/me response: %s", str(data)[:300])
-
     # Unwrap various NOVIVO response shapes:
     # { user: {...} }  /  { data: { user: {...} } }  /  { data: {...} }  /  { ...flat... }
     info = data

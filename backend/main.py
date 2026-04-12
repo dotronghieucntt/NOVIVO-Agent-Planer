@@ -16,7 +16,9 @@ if hasattr(sys.stderr, 'reconfigure'):
     except Exception: pass
 
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("deps").setLevel(logging.DEBUG)
+# Suppress noisy third-party loggers
+for _noisy in ("httpx", "httpcore", "google", "google_genai", "google.genai", "asyncio"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 from database import init_db
 from models.user import User, UserRole
 from database import SessionLocal
@@ -130,6 +132,11 @@ app.include_router(chat_router)
 app.include_router(content_router)
 app.include_router(admin_router)
 app.include_router(settings_router)
+
+
+@app.get('/health', include_in_schema=False)
+async def health_check():
+    return {'status': 'ok'}
 
 
 @app.exception_handler(Exception)
