@@ -1,13 +1,68 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trash2, Clock, Tag, X, FileText, Hash, Loader2, Mic, Eye, Wand2, Music } from 'lucide-react'
+import { Trash2, Clock, Tag, X, FileText, Hash, Loader2, Mic, Eye, Wand2, Music, Copy, ClipboardList } from 'lucide-react'
 import { cn, formatDate, formatDuration, STATUS_COLORS } from '@/lib/utils'
 import { contentApi } from '@/lib/api'
 import toast from 'react-hot-toast'
 
+function useCopy() {
+  const copy = (text) => {
+    navigator.clipboard.writeText(text).then(() => toast.success('Đã copy!')).catch(() => toast.error('Copy thất bại'))
+  }
+  return copy
+}
+
+function CopyBtn({ text, className = '' }) {
+  const copy = useCopy()
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); copy(text) }}
+      className={cn('btn-icon text-secondary hover:text-brand-300 flex-shrink-0', className)}
+      title="Copy"
+    >
+      <Copy size={11} />
+    </button>
+  )
+}
+
+function buildFullText(data) {
+  const lines = []
+  lines.push(`=== ${data.title} ===`)
+  if (data.topic && data.topic !== data.title) lines.push(`Góc: ${data.topic}`)
+  if (data.channel) lines.push(`Kênh: ${data.channel}`)
+  if (data.duration_seconds) lines.push(`Thời lượng: ${data.duration_seconds}s`)
+  if (data.tags?.length) lines.push(`Hashtag: ${data.tags.join(' ')}`)
+  lines.push('')
+
+  const sd = data.script_data || {}
+  if (sd.hook) {
+    lines.push('⚡ HOOK MỞ ĐẦU')
+    lines.push(sd.hook)
+    lines.push('')
+  }
+
+  if (sd.segments?.length) {
+    lines.push('📋 PHÂN ĐOẠN NỘI DUNG')
+    sd.segments.forEach((seg, i) => {
+      lines.push(`\n[Đoạn ${seg.segment_number ?? i + 1}${seg.duration ? ` - ${seg.duration}s` : ''}${seg.transition ? ` - ${seg.transition}` : ''}]`)
+      if (seg.voiceover) lines.push(`🎙 Lời thoại: ${seg.voiceover}`)
+      if (seg.on_screen_text) lines.push(`📄 Text màn hình: ${seg.on_screen_text}`)
+      if (seg.visual_prompt) lines.push(`✨ Visual prompt: ${seg.visual_prompt}`)
+    })
+    lines.push('')
+  }
+
+  if (sd.background_music) lines.push(`🎵 Nhạc nền: ${sd.background_music}`)
+  if (sd.ai_tools) lines.push(`🤖 Công cụ AI: ${sd.ai_tools}`)
+  if (sd.caption) { lines.push(''); lines.push(`📝 Caption: ${sd.caption}`) }
+
+  return lines.join('\n')
+}
+
 function ScriptDetailModal({ scriptId, onClose }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const copy = useCopy()
 
   useEffect(() => {
     contentApi.getScript(scriptId)
@@ -36,9 +91,21 @@ function ScriptDetailModal({ scriptId, onClose }) {
             <FileText size={16} className="text-brand-400" />
             <span className="font-semibold text-primary text-sm">Chi tiết kịch bản</span>
           </div>
-          <button onClick={onClose} className="btn-icon text-secondary hover:text-primary">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            {data && (
+              <button
+                onClick={() => copy(buildFullText(data))}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium text-brand-300 hover:text-brand-200 hover:bg-brand-600/15 transition-colors"
+                title="Copy toàn bộ kịch bản"
+              >
+                <ClipboardList size={13} />
+                Copy All
+              </button>
+            )}
+            <button onClick={onClose} className="btn-icon text-secondary hover:text-primary">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -78,20 +145,24 @@ function ScriptDetailModal({ scriptId, onClose }) {
 
               {/* Tags */}
               {data.tags?.length > 0 && (
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {data.tags.map(t => (
                     <span key={t} className="text-xs px-2 py-0.5 rounded-md flex items-center gap-1"
                       style={{ background: 'rgba(139,92,246,0.12)', color: '#c4b5fd' }}>
                       <Hash size={9} />{t.replace(/^#/, '')}
                     </span>
                   ))}
+                  <CopyBtn text={data.tags.join(' ')} />
                 </div>
               )}
 
               {/* Hook */}
               {data.script_data?.hook && (
                 <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                  <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide mb-1">⚡ Hook mở đầu</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide">⚡ Hook mở đầu</p>
+                    <CopyBtn text={data.script_data.hook} />
+                  </div>
                   <p className="text-primary leading-relaxed">{data.script_data.hook}</p>
                 </div>
               )}
@@ -113,21 +184,24 @@ function ScriptDetailModal({ scriptId, onClose }) {
                           {seg.transition && <span className="text-secondary opacity-60">{seg.transition}</span>}
                         </div>
                         {seg.voiceover && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-start">
                             <Mic size={11} className="text-brand-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-primary leading-relaxed">{seg.voiceover}</p>
+                            <p className="text-primary leading-relaxed flex-1">{seg.voiceover}</p>
+                            <CopyBtn text={seg.voiceover} />
                           </div>
                         )}
                         {seg.on_screen_text && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-start">
                             <FileText size={11} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-emerald-300 leading-relaxed">{seg.on_screen_text}</p>
+                            <p className="text-emerald-300 leading-relaxed flex-1">{seg.on_screen_text}</p>
+                            <CopyBtn text={seg.on_screen_text} />
                           </div>
                         )}
                         {seg.visual_prompt && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-start">
                             <Wand2 size={11} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-yellow-200/70 leading-relaxed italic">{seg.visual_prompt}</p>
+                            <p className="text-yellow-200/70 leading-relaxed italic flex-1">{seg.visual_prompt}</p>
+                            <CopyBtn text={seg.visual_prompt} />
                           </div>
                         )}
                       </div>
@@ -140,15 +214,19 @@ function ScriptDetailModal({ scriptId, onClose }) {
               {data.script_data?.background_music && (
                 <div className="flex gap-2 items-start">
                   <Music size={12} className="text-brand-400 flex-shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-[10px] font-semibold text-secondary uppercase tracking-wide mb-0.5">Nhạc nền</p>
                     <p className="text-xs text-primary">{data.script_data.background_music}</p>
                   </div>
+                  <CopyBtn text={data.script_data.background_music} />
                 </div>
               )}
               {data.script_data?.ai_tools && (
                 <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                  <p className="text-[10px] font-semibold text-brand-300 uppercase tracking-wide mb-1">🤖 Công cụ AI gợi ý</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-semibold text-brand-300 uppercase tracking-wide">🤖 Công cụ AI gợi ý</p>
+                    <CopyBtn text={data.script_data.ai_tools} />
+                  </div>
                   <p className="text-secondary">{data.script_data.ai_tools}</p>
                 </div>
               )}
